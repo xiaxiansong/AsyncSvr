@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from cases import SHEETS
+from cases import SHEETS, NON_MANUAL
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.worksheet.datavalidation import DataValidation
@@ -36,19 +36,30 @@ wb.remove(wb.active)
 # ---------- 说明 ----------
 ws = wb.create_sheet("说明")
 lines = [
-    ("洛书（屏幕感知）多机型适配测试用例", True),
-    ("测试对象：swing_service 在洛书链路中承担的“系统级桥接与治理层”职责（接入鉴权、事件生命周期、参数下发、数据搬运、设备状态注入、结果分发、可靠性与打点）。不测算法/模型识别效果。", False),
-    ("用例组织：公共用例（所有机型都要执行，含直板基线机）+ 三折叠 / 双折叠 / 阔折叠 / 小折叠 专项用例。", False),
-    ("执行建议：每个机型先跑公共用例 L0，再跑本机型专项 L0，最后跑 L1/L2。L0=冒烟必过，L1=功能完整性，L2=异常/白盒。", False),
-    ("每条用例执行时同步抓 hilog，并按“日志核对点”列及《日志核对指南》页核对 swing_service 是否履行了对应职责。", False),
-    ("《预期值对照表》页：黄色单元格需按机型适配规格（FoldStatus 映射表、phyrotation.offset、rotation_correction、cameraId）填写期望值，执行时填实测值，结论列自动判定。", False),
-    ("《执行结果》列可选：通过 / 不通过 / 阻塞 / 不涉及。", False),
+    ("洛书（屏幕感知）多机型适配 —— 真机手工测试用例", True),
+    ("测试对象：swing_service 在洛书链路中的职责（接入鉴权、事件生命周期、参数下发、数据搬运、设备状态注入、结果分发、可靠性与打点）。测试方式：真机手工操作，同时抓日志核对。不评价算法识别准确率。", False),
+    ("用例组织：公共用例（每个机型都要执行，建议再拿一台直板机作为基线）+ 三折叠 / 双折叠 / 阔折叠 / 小折叠 专项用例。手工无法覆盖的项见《非手工覆盖项》页。", False),
+    ("执行顺序：每个机型先跑公共 L0，再跑本机型专项 L0，最后跑 L1/L2。L0=冒烟必过，L1=功能完整性，L2=边缘场景。", False),
+    ("", False),
+    ("一、入口约定（请填写一次，用例中统一使用以下简称）", True),
+    ("【屏幕感知】（触发 901 ACTIVE_SCREEN_AWARENESS）入口：____________________", False),
+    ("【游戏理解】（触发 903 GAME_OCR_UNDERSTAND）入口：____________________　测试游戏：____________", False),
+    ("“触发屏幕感知 / 触发识别”指按业务方式让功能给出一次结果。", False),
+    ("", False),
+    ("二、每条用例的日志抓取流程", True),
+    ("1、执行前：hdc shell hilog -r 清空缓存日志（必要时 hdc shell hilog -b D 打开 DEBUG 级别）", False),
+    ("2、执行中：hdc shell hilog > 用例编号_机型.log 实时落盘（或使用公司内部抓日志工具）", False),
+    ("3、执行后：按该用例的“日志核对点”列和《日志核对指南》页逐项检索；检查 /data/log/faultlog/ 是否有新增 crash", False),
+    ("4、不通过时：在“备注/问题单”列记录现象、时间点、日志文件名和问题单号", False),
+    ("", False),
+    ("三、预期值", True),
+    ("《预期值对照表》页的黄色单元格请按机型适配规格（FoldStatus 映射表、phyrotation.offset、rotation_correction、cameraId）先填好期望值，执行时填实测值，结论列自动判定。", False),
     ("注意：日志关键字、命令参数为建议写法，请以代码实际打印内容和本分支工具帮助为准。", False),
 ]
 ws.column_dimensions["A"].width = 120
 for i, (t, b) in enumerate(lines, 1):
     c = ws.cell(row=i, column=1, value=t)
-    c.font = Font(name=FONT, bold=b, size=14 if b else 10)
+    c.font = Font(name=FONT, bold=b, size=14 if (b and i == 1) else (11 if b else 10))
     c.alignment = Alignment(wrap_text=True, vertical="top")
 
 # ---------- 用例页 ----------
@@ -59,7 +70,7 @@ for sheet_name, cases in SHEETS:
     header(ws, COLS, WIDTHS)
     dv = DataValidation(type="list", formula1='"通过,不通过,阻塞,不涉及"', allow_blank=True)
     ws.add_data_validation(dv)
-    for r, (cid, lvl, name, pre, steps, exp, log) in enumerate(cases, 2):
+    for r, (cid, lvl, name, pre, steps, exp, log, _tags) in enumerate(cases, 2):
         vals = [cid, lvl, name, num(pre), num(steps), num(exp), num(log), None, None]
         for ci, v in enumerate(vals, 1):
             body(ws.cell(row=r, column=ci, value=v))
@@ -86,12 +97,12 @@ for r, row in enumerate(guide, 2):
 r = len(guide) + 3
 ws.cell(row=r, column=1, value="常用命令（参考，以本分支工具帮助为准）").font = Font(name=FONT, bold=True)
 cmds = [
-    ("清空/抓取日志", "hilog -r ；hilog -b D ；hilog | grep -iE \"swing|igs|hiai\""),
-    ("查看机型参数", "param get const.window.phyrotation.offset ；param get const.dms.rotation_correction"),
-    ("进程与 fd", "pidof <swing_service 进程名> ；ls /proc/<pid>/fd | wc -l"),
-    ("内存", "hidumper --mem <pid>"),
-    ("打点", "hisysevent -l（按事件域过滤）"),
-    ("崩溃", "ls /data/log/faultlog/faultlogger/"),
+    ("清空/抓取日志", "hdc shell hilog -r ；hdc shell hilog -b D ；hdc shell hilog | grep -iE \"swing|igs|hiai\""),
+    ("查看机型参数", "hdc shell param get const.window.phyrotation.offset ；hdc shell param get const.dms.rotation_correction"),
+    ("进程与 fd", "（调试版本）hdc shell pidof <swing_service 进程名> ；hdc shell ls /proc/<pid>/fd | wc -l"),
+    ("内存", "hdc shell hidumper --mem <pid>"),
+    ("打点", "hdc shell hisysevent -l（按事件域过滤）"),
+    ("崩溃", "hdc shell ls /data/log/faultlog/faultlogger/ ；hdc file recv 拉取到电脑"),
     ("折叠/显示状态", "hidumper 查询 DisplayManager 的当前 FoldStatus / FoldDisplayMode"),
 ]
 for i, (a, b) in enumerate(cmds, r + 1):
@@ -134,34 +145,23 @@ for r, row in enumerate(rows, 3):
 ws = wb.create_sheet("覆盖矩阵")
 cols = ["覆盖维度", "公共", "三折叠", "双折叠", "阔折叠", "小折叠"]
 header(ws, cols, [36, 22, 22, 22, 22, 22])
-def ids(sheet, nums):
-    p = {"公共": "LS_COMM_", "三折叠": "LS_TRI_", "双折叠": "LS_DUAL_", "阔折叠": "LS_WIDE_", "小折叠": "LS_FLIP_"}[sheet]
-    return "、".join(f"{p}{n:03d}" for n in nums) if nums else "—"
-matrix = [
-    ("能力探测", [1], [1], [], [], [2]),
-    ("鉴权 / eventId / domainId", [2, 3], [], [], [], []),
-    ("订阅退订 / 引用计数 / 异常调用", [4, 5, 6, 7, 8], [], [], [], []),
-    ("睡眠/S4", [9], [], [], [], [9]),
-    ("亮灭屏 stateId=1 / 切屏不误报", [10], [12], [9, 11], [9], [3]),
-    ("相机互斥白名单", [11], [], [8], [], []),
-    ("参数下发 / SetParam / EnableEvent", [12, 13, 14, 15], [], [], [10], []),
-    ("SendFileByFd / DataType / fd", [16, 17, 18], [13], [12], [], []),
-    ("结果分发 / 日志隐私 / ion_fd", [19, 20, 21], [], [], [], []),
-    ("可靠性（HiAI/SensorHub/自身重启）与打点", [22, 23, 24, 25], [], [], [], []),
-    ("初始状态注入", [26], [2], [1, 2], [1, 2], [1]),
-    ("折叠状态 stateId=3 / 80 映射", [], [2, 3, 4, 5], [3, 4], [5, 6], [3, 4, 5]),
-    ("HALF_FOLD 与 DisplayMode 判断", [], [5], [3], [6], [4, 5, 7]),
-    ("旋转 stateId=2 / 78 / 偏置修正", [27], [6, 7, 8, 9], [5, 6, 10], [3, 4], [6, 7]),
-    ("相机切换 stateId=0 / cameraId", [], [10], [7, 8], [7], [8]),
-    ("产品形态宏（PC/Pad/TV）", [27], [11], [], [], []),
-    ("压力 / 长稳", [28, 29], [14], [13], [11], [10]),
-    ("省电等系统模式", [30], [], [], [], []),
-    ("外屏运行业务", [], [], [], [8], [2]),
-]
-for r, (dim, *cells) in enumerate(matrix, 2):
+DIMS = ["能力探测", "接入鉴权", "开关生命周期", "订阅方退出清理", "亮灭屏/睡眠", "相机", "参数下发",
+        "数据通道", "游戏903", "日志隐私", "打点", "初始状态注入", "折叠映射", "半折", "旋转", "切屏",
+        "外屏", "系统场景", "稳定性"]
+for r, dim in enumerate(DIMS, 2):
     body(ws.cell(row=r, column=1, value=dim))
-    for ci, (sheet, nums) in enumerate(zip(cols[1:], cells), 2):
-        body(ws.cell(row=r, column=ci, value=ids(sheet, nums)))
+    for ci, (sheet_name, cases) in enumerate(SHEETS, 2):
+        hit = [c[0] for c in cases if dim in c[7]]
+        body(ws.cell(row=r, column=ci, value="、".join(hit) if hit else "—"))
+unknown = {t for _, cs in SHEETS for c in cs for t in c[7]} - set(DIMS)
+assert not unknown, unknown
+
+# ---------- 非手工覆盖项 ----------
+ws = wb.create_sheet("非手工覆盖项")
+header(ws, ["序号", "测试点", "对应职责", "建议覆盖方式"], [8, 60, 16, 40])
+for r, (pt, duty, how) in enumerate(NON_MANUAL, 2):
+    for ci, v in enumerate((r - 1, pt, duty, how), 1):
+        body(ws.cell(row=r, column=ci, value=v))
 
 path = os.path.join(OUT_DIR, "洛书多机型适配测试用例.xlsx")
 wb.save(path)
@@ -169,10 +169,10 @@ print(path)
 
 # ---------- Markdown ----------
 md = ["# 洛书（屏幕感知）多机型适配测试用例", "",
-      "> 由同目录 Excel 同源生成。Excel 中另含《日志核对指南》《预期值对照表》《覆盖矩阵》。", ""]
+      "> 真机手工测试用例，与同目录 Excel 同源生成。Excel 中另含《说明》（入口约定、日志抓取流程）《日志核对指南》《预期值对照表》《覆盖矩阵》《非手工覆盖项》。", ""]
 for sheet_name, cases in SHEETS:
     md.append(f"## {sheet_name}（{len(cases)} 条）\n")
-    for cid, lvl, name, pre, steps, exp, log in cases:
+    for cid, lvl, name, pre, steps, exp, log, _tags in cases:
         md.append(f"### {cid}【{lvl}】{name}\n")
         md.append("| 字段 | 内容 |\n|---|---|")
         br = lambda l: "<br>".join(f"{i}、{x}" for i, x in enumerate(l, 1)).replace("|", "\\|")
@@ -181,4 +181,8 @@ for sheet_name, cases in SHEETS:
         md.append(f"| 用例_测试步骤 | {br(steps)} |")
         md.append(f"| 用例_预期结果 | {br(exp)} |")
         md.append(f"| 日志核对点 | {br(log)} |\n")
-open(os.path.join(OUT_DIR, "洛书多机型适配测试用例.md"), "w", encoding="utf-8").write("\n".join(md))
+md.append("## 非手工覆盖项（建议开发自测/自动化）\n")
+md.append("| 测试点 | 职责 | 建议方式 |\n|---|---|---|")
+for pt, duty, how in NON_MANUAL:
+    md.append(f"| {pt} | {duty} | {how} |")
+open(os.path.join(OUT_DIR, "洛书多机型适配测试用例.md"), "w", encoding="utf-8").write("\n".join(md) + "\n")
