@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from cases import SHEETS, NON_MANUAL, SUPPORT, SCENARIOS
+from cases import SHEETS, NON_MANUAL, SUPPORT, SCENARIOS, DIMS
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.worksheet.datavalidation import DataValidation
@@ -36,16 +36,19 @@ wb.remove(wb.active)
 # ---------- 说明 ----------
 ws = wb.create_sheet("说明")
 lines = [
-    ("洛书（屏幕感知）多机型适配 —— 真机手工测试用例", True),
-    ("测试对象：swing_service 在洛书链路中的职责（接入鉴权、事件生命周期、参数下发、数据搬运、设备状态注入、结果分发、可靠性与打点）。测试方式：真机手工操作，同时抓日志核对。不评价算法识别准确率。", False),
-    ("场景支持性：每条用例标注“支持 / 待确认 / 预期不支持”。“预期不支持”的用例验证的是正确拒绝：不工作或给出提示、不闪退、日志没有 error 级异常，属于正常现象。“待确认”请按《支持场景清单》经源码确认后再定预期。", False),
-    ("用例组织：公共用例（每个机型都要执行，建议再拿一台直板机作为基线）+ 三折叠 / 双折叠 / 阔折叠 / 小折叠 专项用例。手工无法覆盖的项见《非手工覆盖项》页。", False),
+    ("洛书（AI伴随）多机型适配 —— 真机手工测试用例", True),
+    ("测试对象：swing_service 在洛书链路中的职责（接入鉴权、事件生命周期、参数下发、数据搬运、设备状态注入、结果分发、可靠性与打点）。测试方式：用户视角真机手工操作 AI伴随，同时抓日志核对。不评价 AI 回复和识别的准确率。", False),
+    ("用例组织：公共用例（每个机型都执行，建议再拿一台直板机作为基线）+ 三折叠 / 双折叠 / 阔折叠 / 小折叠 专项用例。手工无法覆盖的项见《非手工覆盖项》页。", False),
     ("执行顺序：每个机型先跑公共 L0，再跑本机型专项 L0，最后跑 L1/L2。L0=冒烟必过，L1=功能完整性，L2=边缘场景。", False),
+    ("场景支持性：每条用例标注“支持 / 待确认 / 预期不支持”。“预期不支持”验证的是正确拒绝：不进入伴随或给出提示、不闪退、日志无 error 级异常、离开该场景后可正常使用，属于正常现象。“待确认”需经源码或业务方确认后再定预期。", False),
     ("", False),
-    ("一、入口约定（请填写一次，用例中统一使用以下简称）", True),
-    ("【屏幕感知】（触发 901 ACTIVE_SCREEN_AWARENESS）入口：____________________", False),
-    ("【游戏理解】（触发 903 GAME_OCR_UNDERSTAND）入口：____________________　测试游戏：____________", False),
-    ("“触发屏幕感知 / 触发识别”指按业务方式让功能给出一次结果。", False),
+    ("一、AI伴随交互说明", True),
+    ("前提：设置中【AI伴随】开关开启（首次开机引导可选择是否开启；开启后默认开启，可在设置中关闭）。", False),
+    ("入口：双击导航条。桌面双击 → 无屏伴随；应用中双击 → 小屏伴随。部分折叠形态不能进入（如三折叠单屏态），需逐形态测试。", False),
+    ("无屏伴随：有动效，导航条变色。桌面上只能是无屏伴随。", False),
+    ("小屏伴随：让出部分显示区域，含【识别屏幕】、【点击/按住说话】、【叉号】（退出）按钮；识别屏幕后出现与屏幕内容相关的推荐问题气泡；点击气泡即以其内容提问并进入大屏伴随。", False),
+    ("大屏伴随：约占半屏；说话按钮变大并多出键盘图标；中间显示 AI 回复；识别屏幕后仍出现气泡；另有【禁止外放】和【伴随记录】按钮。", False),
+    ("状态切换：应用中拖动伴随区域在无屏/小屏/大屏之间切换；伴随中从桌面打开应用 → 自动变小屏伴随；从应用回桌面 → 自动变无屏伴随。", False),
     ("", False),
     ("二、每条用例的日志抓取流程", True),
     ("1、执行前：hdc shell hilog -r 清空缓存日志（必要时 hdc shell hilog -b D 打开 DEBUG 级别）", False),
@@ -55,7 +58,7 @@ lines = [
     ("", False),
     ("三、预期值", True),
     ("《预期值对照表》页的黄色单元格请按机型适配规格（FoldStatus 映射表、phyrotation.offset、rotation_correction、cameraId）先填好期望值，执行时填实测值，结论列自动判定。", False),
-    ("注意：日志关键字、命令参数为建议写法，请以代码实际打印内容和本分支工具帮助为准。", False),
+    ("注意：日志关键字、订阅时机为建议写法，请以代码实际打印内容为准。", False),
 ]
 ws.column_dimensions["A"].width = 120
 for i, (t, b) in enumerate(lines, 1):
@@ -146,9 +149,6 @@ for r, row in enumerate(rows, 3):
 ws = wb.create_sheet("覆盖矩阵")
 cols = ["覆盖维度", "公共", "三折叠", "双折叠", "阔折叠", "小折叠"]
 header(ws, cols, [36, 22, 22, 22, 22, 22])
-DIMS = ["能力探测", "接入鉴权", "开关生命周期", "订阅方退出清理", "亮灭屏/睡眠", "相机", "参数下发",
-        "数据通道", "游戏903", "日志隐私", "打点", "初始状态注入", "折叠映射", "半折", "旋转", "切屏",
-        "外屏", "系统场景", "稳定性"]
 for r, dim in enumerate(DIMS, 2):
     body(ws.cell(row=r, column=1, value=dim))
     for ci, (sheet_name, cases) in enumerate(SHEETS, 2):
