@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from cases import SHEETS, NON_MANUAL, SUPPORT, SCENARIOS, DIMS, BASELINE, GENERIC_CHECK
+from cases import SHEETS, NON_MANUAL, SUPPORT, SCENARIOS, DIMS, BASELINE, GENERIC_CHECK, FORMS
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.worksheet.datavalidation import DataValidation
@@ -41,7 +41,7 @@ lines = [
     ("测试对象：swing_service 在洛书链路中的职责（接入鉴权、事件生命周期、参数下发、数据搬运、设备状态注入、结果分发、可靠性与打点）。测试方式：用户视角真机手工操作 AI伴随，同时抓日志核对。不评价 AI 回复和识别的准确率。", False),
     ("用例组织：公共用例（每个机型都执行，建议再拿一台直板机作为基线）+ 三折叠 / 双折叠 / 阔折叠 / 小折叠 专项用例。手工无法覆盖的项见《非手工覆盖项》页。", False),
     ("执行顺序：每个机型先跑公共 L0，再跑本机型专项 L0，最后跑 L1/L2。L0=冒烟必过，L1=功能完整性，L2=边缘场景。", False),
-    ("场景支持性：每条用例标注“支持 / 待确认 / 预期不支持”。“预期不支持”验证的是正确拒绝：不进入伴随或给出提示、不闪退、日志无 error 级异常、离开该场景后可正常使用，属于正常现象。“待确认”需经源码或业务方确认后再定预期。", False),
+    ("场景支持性：每条用例标注“支持 / 按规格 / 待确认 / 预期不支持”。“按规格”表示结果取决于该机型该形态的产品规格（见《形态入口矩阵》），不预设能否进入伴随。“预期不支持”验证的是正确拒绝：不进入伴随或给出提示、不闪退、日志无 error 级异常、离开该场景后可正常使用，属于正常现象。“待确认”需经源码或业务方确认后再定预期。", False),
     ("", False),
     ("一、AI伴随交互说明", True),
     ("前提：设置中【AI伴随】开关开启（首次开机引导可选择是否开启；开启后默认开启，可在设置中关闭）。", False),
@@ -157,6 +157,25 @@ for r, dim in enumerate(DIMS, 2):
         body(ws.cell(row=r, column=ci, value="、".join(hit) if hit else "—"))
 unknown = {t for _, cs in SHEETS for c in cs for t in c[7]} - set(DIMS)
 assert not unknown, unknown
+
+# ---------- 形态入口矩阵 ----------
+ws = wb.create_sheet("形态入口矩阵")
+ws.cell(row=1, column=1, value="各机型各形态下能否进入 AI伴随。黄色列先按产品规格填写期望（能进入 / 不能进入）和规格来源；执行 _001 及边界用例时填实测，结论自动判定。用例中“按规格”的预期均以本页为准。").font = Font(name=FONT, italic=True)
+ws.merge_cells("A1:G1")
+header(ws, ["机型", "形态", "入口场景", "规格：能否进入", "规格来源", "实测结果", "结论"], [10, 22, 16, 16, 30, 14, 10], row=2)
+dvf = DataValidation(type="list", formula1='"能进入,不能进入"', allow_blank=True)
+ws.add_data_validation(dvf)
+r = 3
+for dev, forms in FORMS:
+    for f in forms:
+        for scene in ("桌面双击导航条", "应用中双击导航条"):
+            for ci, v in enumerate((dev, f, scene, None, None, None), 1):
+                c = ws.cell(row=r, column=ci, value=v); body(c)
+                if ci in (4, 5):
+                    c.fill = INPUT_FILL
+            dvf.add(ws.cell(row=r, column=4)); dvf.add(ws.cell(row=r, column=6))
+            body(ws.cell(row=r, column=7, value=f'=IF(F{r}="","",IF(D{r}=F{r},"通过","不通过"))'))
+            r += 1
 
 # ---------- 行为基线 ----------
 ws = wb.create_sheet("行为基线")
