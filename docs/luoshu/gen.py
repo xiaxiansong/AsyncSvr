@@ -40,8 +40,8 @@ lines = [
     ("本次需求的两个目标：① 洛书（AI伴随）在各机型、各形态下都能正常使用 —— 由“用例_预期结果（功能表现）”列判定；② swing_service 中洛书相关部分正常运行，不出现报错和不符合预期的行为 —— 由“swing_service 核对点（日志）”列和《行为基线》页判定。两项都满足才算用例通过。", False),
     ("测试对象：swing_service 在洛书链路中的职责（接入鉴权、事件生命周期、参数下发、数据搬运、设备状态注入、结果分发、可靠性与打点）。测试方式：用户视角真机手工操作 AI伴随，同时抓日志核对。不评价 AI 回复和识别的准确率。", False),
     ("用例组织：公共用例（每个机型都执行，建议再拿一台直板机作为基线）+ 三折叠 / 双折叠 / 阔折叠 / 小折叠 专项用例。手工无法覆盖的项见《非手工覆盖项》页。", False),
-    ("执行顺序：每个机型先跑公共 L0，再跑本机型专项 L0，最后跑 L1/L2。L0=冒烟必过，L1=功能完整性，L2=边缘场景。", False),
-    ("场景支持性：每条用例标注“支持 / 按规格 / 待确认 / 预期不支持”。“按规格”表示结果取决于该机型该形态的产品规格（见《形态入口矩阵》），不预设能否进入伴随。“预期不支持”验证的是正确拒绝：不进入伴随或给出提示、不闪退、日志无 error 级异常、离开该场景后可正常使用，属于正常现象。“待确认”需经源码或业务方确认后再定预期。", False),
+    ("执行顺序：每个机型先执行本机型的 _001（各形态能否进入伴随），把结果记入《形态入口矩阵》；再跑公共 L0、本机型专项 L0，最后跑 L1/L2。L0=冒烟必过，L1=功能完整性，L2=边缘场景。", False),
+    ("场景支持性：每条用例标注“支持 / 按实测 / 待确认 / 预期不支持”。“按实测”表示该形态能否进入伴随事先未知，能进入、不能进入都属于正常，判定看行为是否干净、前后是否一致；实测结果记入《形态入口矩阵》，后续用例以它为准。“预期不支持”验证的是正确拒绝：不进入伴随或给出提示、不闪退、日志无 error 级异常、离开该场景后可正常使用，属于正常现象。“待确认”需经源码或业务方确认后再定预期。", False),
     ("", False),
     ("一、AI伴随交互说明", True),
     ("前提：设置中【AI伴随】开关开启（首次开机引导可选择是否开启；开启后默认开启，可在设置中关闭）。", False),
@@ -160,21 +160,24 @@ assert not unknown, unknown
 
 # ---------- 形态入口矩阵 ----------
 ws = wb.create_sheet("形态入口矩阵")
-ws.cell(row=1, column=1, value="各机型各形态下能否进入 AI伴随。黄色列先按产品规格填写期望（能进入 / 不能进入）和规格来源；执行 _001 及边界用例时填实测，结论自动判定。用例中“按规格”的预期均以本页为准。").font = Font(name=FONT, italic=True)
-ws.merge_cells("A1:G1")
-header(ws, ["机型", "形态", "入口场景", "规格：能否进入", "规格来源", "实测结果", "结论"], [10, 22, 16, 16, 30, 14, 10], row=2)
-dvf = DataValidation(type="list", formula1='"能进入,不能进入"', allow_blank=True)
-ws.add_data_validation(dvf)
+ws.cell(row=1, column=1, value="各机型各形态下能否进入 AI伴随，事先未知。能进入、不能进入都属于正常，由测试人员执行各机型 _001 时记录实测。判定只看两点：行为是否干净（不闪退、无残留、swing_service 无订阅残留和 error），以及重复尝试结果是否一致。后续用例中“与《形态入口矩阵》实测一致”均以本页为准。“不能进入”的形态汇总后与业务方确认是否符合设计（不阻塞测试）。").font = Font(name=FONT, italic=True)
+ws.cell(row=1, column=1).alignment = Alignment(wrap_text=True, vertical="top")
+ws.row_dimensions[1].height = 48
+ws.merge_cells("A1:I1")
+header(ws, ["机型", "形态", "入口场景", "实测：能否进入", "不能进入时的表现（无反应/提示文字）", "重复 3 次结果一致", "swing_service 日志干净", "业务方确认（可后补）", "结论"], [10, 22, 16, 14, 30, 14, 16, 18, 10], row=2)
+dv_in = DataValidation(type="list", formula1='"能进入,不能进入"', allow_blank=True)
+dv_yn = DataValidation(type="list", formula1='"是,否"', allow_blank=True)
+ws.add_data_validation(dv_in); ws.add_data_validation(dv_yn)
 r = 3
 for dev, forms in FORMS:
     for f in forms:
         for scene in ("桌面双击导航条", "应用中双击导航条"):
-            for ci, v in enumerate((dev, f, scene, None, None, None), 1):
+            for ci, v in enumerate((dev, f, scene, None, None, None, None, None), 1):
                 c = ws.cell(row=r, column=ci, value=v); body(c)
-                if ci in (4, 5):
+                if ci >= 4:
                     c.fill = INPUT_FILL
-            dvf.add(ws.cell(row=r, column=4)); dvf.add(ws.cell(row=r, column=6))
-            body(ws.cell(row=r, column=7, value=f'=IF(F{r}="","",IF(D{r}=F{r},"通过","不通过"))'))
+            dv_in.add(ws.cell(row=r, column=4)); dv_yn.add(ws.cell(row=r, column=6)); dv_yn.add(ws.cell(row=r, column=7))
+            body(ws.cell(row=r, column=9, value=f'=IF(OR(D{r}="",F{r}="",G{r}=""),"",IF(AND(F{r}="是",G{r}="是"),"通过","不通过"))'))
             r += 1
 
 # ---------- 行为基线 ----------
