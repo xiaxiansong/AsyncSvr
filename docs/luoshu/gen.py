@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from cases import SHEETS, NON_MANUAL, SUPPORT, SCENARIOS, DIMS
+from cases import SHEETS, NON_MANUAL, SUPPORT, SCENARIOS, DIMS, BASELINE, GENERIC_CHECK
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.worksheet.datavalidation import DataValidation
@@ -37,6 +37,7 @@ wb.remove(wb.active)
 ws = wb.create_sheet("说明")
 lines = [
     ("洛书（AI伴随）多机型适配 —— 真机手工测试用例", True),
+    ("本次需求的两个目标：① 洛书（AI伴随）在各机型、各形态下都能正常使用 —— 由“用例_预期结果（功能表现）”列判定；② swing_service 中洛书相关部分正常运行，不出现报错和不符合预期的行为 —— 由“swing_service 核对点（日志）”列和《行为基线》页判定。两项都满足才算用例通过。", False),
     ("测试对象：swing_service 在洛书链路中的职责（接入鉴权、事件生命周期、参数下发、数据搬运、设备状态注入、结果分发、可靠性与打点）。测试方式：用户视角真机手工操作 AI伴随，同时抓日志核对。不评价 AI 回复和识别的准确率。", False),
     ("用例组织：公共用例（每个机型都执行，建议再拿一台直板机作为基线）+ 三折叠 / 双折叠 / 阔折叠 / 小折叠 专项用例。手工无法覆盖的项见《非手工覆盖项》页。", False),
     ("执行顺序：每个机型先跑公共 L0，再跑本机型专项 L0，最后跑 L1/L2。L0=冒烟必过，L1=功能完整性，L2=边缘场景。", False),
@@ -67,7 +68,7 @@ for i, (t, b) in enumerate(lines, 1):
     c.alignment = Alignment(wrap_text=True, vertical="top")
 
 # ---------- 用例页 ----------
-COLS = ["用例_编号", "用例_级别", "场景支持性", "用例_名称", "用例_预置条件", "用例_测试步骤", "用例_预期结果", "日志核对点", "执行结果", "备注/问题单"]
+COLS = ["用例_编号", "用例_级别", "场景支持性", "用例_名称", "用例_预置条件", "用例_测试步骤", "用例_预期结果（功能表现）", "swing_service 核对点（日志）", "执行结果", "备注/问题单"]
 WIDTHS = [14, 8, 11, 32, 40, 48, 52, 40, 10, 20]
 for sheet_name, cases in SHEETS:
     ws = wb.create_sheet(sheet_name)
@@ -75,7 +76,7 @@ for sheet_name, cases in SHEETS:
     dv = DataValidation(type="list", formula1='"通过,不通过,阻塞,不涉及"', allow_blank=True)
     ws.add_data_validation(dv)
     for r, (cid, lvl, name, pre, steps, exp, log, _tags) in enumerate(cases, 2):
-        vals = [cid, lvl, SUPPORT.get(cid, "支持"), name, num(pre), num(steps), num(exp), num(log), None, None]
+        vals = [cid, lvl, SUPPORT.get(cid, "支持"), name, num(pre), num(steps), num(exp), num([x for x in log if "faultlog" not in x] + [GENERIC_CHECK]), None, None]
         for ci, v in enumerate(vals, 1):
             body(ws.cell(row=r, column=ci, value=v))
         dv.add(ws.cell(row=r, column=9))
@@ -157,6 +158,17 @@ for r, dim in enumerate(DIMS, 2):
 unknown = {t for _, cs in SHEETS for c in cs for t in c[7]} - set(DIMS)
 assert not unknown, unknown
 
+# ---------- 行为基线 ----------
+ws = wb.create_sheet("行为基线")
+ws.cell(row=1, column=1, value="每个用户操作下 swing_service 应有和不应出现的行为，是判定目标②的基准。黄色列由内部 agent 按源码填写。").font = Font(name=FONT, italic=True)
+ws.merge_cells("A1:G1")
+header(ws, ["用户操作", "swing_service 应有行为（正常日志序列）", "不应出现的行为（出现即提问题单）", "关联用例", "实际日志关键字", "预期内的告警（不算问题）", "源码依据（文件:行）"], [22, 50, 40, 22, 30, 30, 24], row=2)
+for r, row in enumerate(BASELINE, 3):
+    for ci, v in enumerate(row, 1):
+        c = ws.cell(row=r, column=ci, value=v or None); body(c)
+        if ci != 1 and ci != 4:
+            c.fill = INPUT_FILL
+
 # ---------- 支持场景清单 ----------
 ws = wb.create_sheet("支持场景清单")
 ws.cell(row=1, column=1, value="“初判”是用例作者根据职责描述的推断，需要 DeepSeek 或开发按源码确认。黄色列待填。“待确认”的场景确认不支持时，对应用例的预期结果改为“不支持时的正确表现”。").font = Font(name=FONT, italic=True)
@@ -192,7 +204,12 @@ for sheet_name, cases in SHEETS:
         md.append(f"| 用例_预置条件 | {br(pre)} |")
         md.append(f"| 用例_测试步骤 | {br(steps)} |")
         md.append(f"| 用例_预期结果 | {br(exp)} |")
-        md.append(f"| 日志核对点 | {br(log)} |\n")
+        md.append(f"| swing_service 核对点 | {br([x for x in log if 'faultlog' not in x] + [GENERIC_CHECK])} |\n")
+md.append("## swing_service 行为基线\n")
+md.append("| 用户操作 | 应有行为 | 不应出现的行为 | 关联用例 | 实际日志关键字 | 预期内的告警 | 源码依据 |\n|---|---|---|---|---|---|---|")
+for row in BASELINE:
+    md.append("| " + " | ".join(x or "（待填）" for x in row) + " |")
+md.append("")
 md.append("## 支持场景清单（初判，待源码确认）\n")
 md.append("| 场景 | 机型 | 初判 | 不支持时的正确表现 | 关联用例 |\n|---|---|---|---|---|")
 for row in SCENARIOS:
