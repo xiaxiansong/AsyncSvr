@@ -3,6 +3,19 @@
 > 给执行 agent 的说明：你运行在一台 Windows 机器上，这台 Windows 能 SSH 到目标 Linux 服务器。目标 Linux **不能访问外网**，所以**不要**在 Linux 上执行任何 `curl ... | sh`、`apt`、`yum`、`dnf` 之类需要联网的命令。
 > 每一步执行完都要检查输出。**某一步失败就停下来，向用户报告完整输出，不要自行改用其他方案。**
 > 需要 `sudo` 的步骤先问用户同意再做。
+>
+> **全程离线**：你（agent）和目标 Linux 都不能访问外网，整个流程也不需要外网。文中出现的所有 URL 只是写给人看的来源说明，**不要尝试访问或下载**。只用到：Windows 本地文件 + 内网 SSH/scp。
+
+## 开始前由用户提供的信息
+
+| 项目 | 值（由用户填写） |
+|---|---|
+| 安装包在 Windows 上的完整路径 | `C:\...\rex-linux-amd64.tar.gz` |
+| Linux 服务器 IP / 主机名 | `<LinuxIP>` |
+| SSH 登录用户（也是以后用 Rex 连接的用户） | `<用户>` |
+| 该用户是否可以使用 sudo | 是 / 否 |
+
+如果用户没提供上面这些信息，先向用户询问，不要猜。安装包文件不存在时，**停止并报告**，不要尝试去下载。
 
 ---
 
@@ -18,7 +31,7 @@
   - 动态依赖只有基础系统库：`libc.so.6`、`libresolv.so.2`、`libpthread.so.0`、`libdl.so.2`、`librt.so.1`，**不需要额外安装依赖**
   - 运行时会按需加载 `libpam.so.0`（只有系统级“登录服务器”模式需要，个人模式一般用不到）
   - 我检查的版本：preview 通道，build `202b1b3fc0219883112258a8d0f9f95e2d47daa9`
-    下载地址：`https://blob.superlogical.com/download/rex/preview/202b1b3fc0219883112258a8d0f9f95e2d47daa9/rex-linux-amd64.tar.gz`
+    该版本的原始下载地址（仅供人参考，agent 不要访问）：`https://blob.superlogical.com/download/rex/preview/202b1b3fc0219883112258a8d0f9f95e2d47daa9/rex-linux-amd64.tar.gz`
     SHA256：`41988e86e87e8b0b47c8bca7652d9959178360f7789785232090784e38e23cb5`
   - ARM64 包 `rex-linux-arm64.tar.gz` 我下载时返回 403，没能核实
 - **官方系统要求**：
@@ -215,7 +228,7 @@ rm -f /usr/local/bin/rex ~/.local/bin/rex  # 删 /usr/local/bin 下的文件需�
 
 ---
 
-参考来源：
+参考来源（仅供人查阅，agent 不要访问）：
 - 官方安装文档：https://www.superlogical.com/rex/docs/linux/installation
 - exe.dev 部署指南：https://exe.dev/deploy/rex
 - NixOS 使用指南：https://frankper.gitlab.io/the-one-nix/guides/how-to-use-rex/
